@@ -31,6 +31,6 @@ df["NoiDung_Da_Tach_Tu"] = df[ten_cot_can_lam_sach].apply(clean_text)
 print("KIỂM TRA DỮ LIỆU SAU KHI LÀM SẠCH ")
 print(df[[ten_cot_can_lam_sach, "NoiDung_Da_Tach_Tu"]].head())
 
-# Xuất thẳng dữ liệu đã xử lý vào file data_clean.csv trong thư mục naive bayes
+
 df.to_csv(output_path, index=False, encoding="utf-8-sig")
 print("\n[Thành công] Đã lưu dữ liệu sạch vào file 'data_clean.csv'!")
