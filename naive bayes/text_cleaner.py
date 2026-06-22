@@ -1,7 +1,6 @@
 import re
 import pandas as pd
 from underthesea import word_tokenize
-import os
 
 
 def clean_text(text):
@@ -12,25 +11,65 @@ def clean_text(text):
     text = re.sub(r'[^\w\s]', ' ', text)        # bỏ dấu câu, !!! ...
     text = re.sub(r'\d+', '', text)             # bỏ số
     text = re.sub(r'\s+', ' ', text).strip()   # chuẩn hoá khoảng trắng
-    
+    return text
+
     if text: 
         text = word_tokenize(text, format="text")   # format="text" tạo dấu gạch dưới: giao_hàng
-        return text
 
-current_dir = os.path.dirname(__file__)
-file_path = os.path.join(current_dir, "data.csv")
-output_path = os.path.join(current_dir, "data_clean.csv")
+text = "giao hàng chậm không mua nữa"
+tokens = word_tokenize(text)
+# → ['giao hàng', 'chậm', 'không', 'mua', 'nữa']
 
-df = pd.read_csv(file_path, encoding="utf-8")
+def doc_file_cam_xuc(file_path):
+    binh_luan = []
+    cam_xuc = []
 
-ten_cot_can_lam_sach = "noi_dung"
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            # Tách câu bằng dấu '|' (thay đổi tùy theo file của bạn)
+            if "|" in line:
+                cau, nhan = line.strip().split("|")
+                binh_luan.append(cau.strip().lower())
+                cam_xuc.append(nhan.strip())
 
-#goi ham de xu ly
-df["NoiDung_Da_Tach_Tu"] = df[ten_cot_can_lam_sach].apply(clean_text)
+    return binh_luan, cam_xuc
 
-print("KIỂM TRA DỮ LIỆU SAU KHI LÀM SẠCH ")
-print(df[[ten_cot_can_lam_sach, "NoiDung_Da_Tach_Tu"]].head())
 
-# Xuất thẳng dữ liệu đã xử lý vào file data_clean.csv trong thư mục naive bayes
-df.to_csv(output_path, index=False, encoding="utf-8-sig")
-print("\n[Thành công] Đã lưu dữ liệu sạch vào file 'data_clean.csv'!")
+x, y = doc_file_cam_xuc("data1.txt")
+print("Danh sách bình luận:", x)
+print("Danh sách cảm xúc:", y)
+
+import re
+
+
+def lam_sach_van_ban(text):
+    # 1. Chuyển thành chữ thường
+    text = text.lower()
+    # 2. Xóa các ký tự đặc biệt, dấu câu, icon (chỉ giữ lại chữ, số và khoảng trắng)
+    text = re.sub(r"[^\w\s]", "", text)
+    # 3. Xóa khoảng trắng thừa ở giữa và 2 đầu câu
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def xu_ly_va_luu_file(input_path, output_path):
+    with open(input_path, "r", encoding="utf-8") as f_in, open(
+        output_path, "w", encoding="utf-8"
+    ) as f_out:
+
+        for line in f_in:
+            if "|" in line:
+                cau, nhan = line.split("|")
+
+                # Làm sạch bình luận và chuẩn hóa nhãn
+                cau_sach = lam_sach_van_ban(cau)
+                nhan_sach = nhan.strip()
+
+                # Chỉ ghi vào file mới nếu câu sau khi xử lý không bị rỗng
+                if cau_sach:
+                    f_out.write(f"{cau_sach} | {nhan_sach}\n")
+
+
+# === CHẠY LỆNH CHUYỂN ĐỔI ===
+xu_ly_va_luu_file("data1.txt", "data1_cleaner.txt")
+print("Đã xử lý dữ liệu thô và lưu thành công sang file 'data1_cleaner.txt'!")
