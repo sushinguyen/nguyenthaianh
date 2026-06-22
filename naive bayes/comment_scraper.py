@@ -16,8 +16,11 @@ Sử dụng:
     python comment_scraper.py --url "https://tiki.vn/..." --platform tiki
     python comment_scraper.py --url "https://www.facebook.com/..." --platform facebook
     python comment_scraper.py --url "https://www.tiktok.com/..." --platform tiktok
-    python comment_scraper.py --url "https://shopee.vn/..." --platform shopee --output comments.csv
+    python comment_scraper.py --url "https://shopee.vn/..." --platform shopee --output results.csv
     python comment_scraper.py --url "https://shopee.vn/..." --platform shopee --max-scrolls 50
+
+Đầu ra mặc định: data.csv
+Các cột: stt, ten_tai_khoan, noi_dung, thoi_gian
 """
 
 import argparse
@@ -115,27 +118,19 @@ PLATFORM_CONFIG = {
         "wait_selector": "[role='main'], [role='feed']",
         "scroll_target": None,  # Cuộn toàn trang
     },
+    # TikTok sử dụng API interception, không dùng CSS selector
     "tiktok": {
         "name": "TikTok",
-        "comment_section": "[data-e2e='comment-list'], .tiktok-1r4cdui-DivCommentListContainer",
-        "comment_items": "[data-e2e='comment-list-item'], .tiktok-1i7ohvi-DivCommentItemContainer",
-        "comment_text": "[data-e2e='comment-level-1'] p, .tiktok-q9aj48-PCommentText, span[data-e2e='comment-level-1']",
-        "username": "[data-e2e='comment-username-1'], .tiktok-1hgxb7o-StyledLink",
+        "comment_section": None,
+        "comment_items": None,
+        "comment_text": None,
+        "username": None,
         "rating": None,
-        "timestamp": "[data-e2e='comment-time-1'], .tiktok-fyi6jh-SpanCreatedTime",
-        "load_more_buttons": [
-            "p:has-text('View more comments')",
-            "p:has-text('Xem thêm bình luận')",
-            "[data-e2e='view-more-1']",
-            "span:has-text('View more replies')",
-        ],
-        "expand_buttons": [
-            "button:has-text('See more')",
-            "button:has-text('Xem thêm')",
-            "p:has-text('more')",
-        ],
-        "wait_selector": "[data-e2e='comment-list'], [data-e2e='browse-video']",
-        "scroll_target": "[data-e2e='comment-list']",
+        "timestamp": None,
+        "load_more_buttons": [],
+        "expand_buttons": [],
+        "wait_selector": None,
+        "scroll_target": None,
     },
 }
 
@@ -183,18 +178,18 @@ class HumanBehavior:
 
         if target_selector:
             # Cuộn trong một container cụ thể
-            page.evaluate(f"""
-                (args) => {{
+            page.evaluate("""
+                (args) => {
                     const el = document.querySelector(args.selector);
-                    if (el) {{
+                    if (el) {
                         let scrolled = 0;
-                        const interval = setInterval(() => {{
+                        const interval = setInterval(() => {
                             el.scrollTop += args.step;
                             scrolled += args.step;
                             if (scrolled >= args.distance) clearInterval(interval);
-                        }}, args.interval);
-                    }}
-                }}
+                        }, args.interval);
+                    }
+                }
             """, {
                 "selector": target_selector,
                 "step": step_distance,
@@ -203,15 +198,15 @@ class HumanBehavior:
             })
         else:
             # Cuộn toàn trang
-            page.evaluate(f"""
-                (args) => {{
+            page.evaluate("""
+                (args) => {
                     let scrolled = 0;
-                    const interval = setInterval(() => {{
+                    const interval = setInterval(() => {
                         window.scrollBy(0, args.step);
                         scrolled += args.step;
                         if (scrolled >= args.distance) clearInterval(interval);
-                    }}, args.interval);
-                }}
+                    }, args.interval);
+                }
             """, {
                 "step": step_distance,
                 "distance": distance,
@@ -253,7 +248,424 @@ class HumanBehavior:
 
 
 # =============================================================================
-# COMMENT SCRAPER CHÍNH
+# TIKTOK SCRAPER - Sử dụng API Interception (ổn định hơn CSS selector)
+# =============================================================================
+
+class TikTokScraper:
+    """
+    Bốc tách bình luận TikTok bằng cách bắt API response.
+
+    Thay vì dùng CSS selector (dễ hỏng khi TikTok cập nhật giao diện),
+    phương pháp này bắt trực tiếp dữ liệu JSON từ API nội bộ của TikTok
+    khi trình duyệt tải bình luận → dữ liệu chính xác 100%.
+    """
+
+    def __init__(self, headless: bool = False, max_scrolls: int = 30):
+        self.headless = headless
+        self.max_scrolls = max_scrolls
+        self.comments: list[Comment] = []
+        self.human = HumanBehavior()
+        self._api_comments: list[dict] = []
+
+    def _on_response(self, response):
+        """
+        Callback bắt API response từ TikTok.
+        TikTok gọi API nội bộ để lấy bình luận, ta bắt response đó.
+        """
+        url = response.url
+        # Các endpoint API bình luận của TikTok
+        comment_api_patterns = [
+            "/api/comment/list",
+            "/comment/list",
+            "comment/list/",
+            "/api/comment/list/reply",
+        ]
+
+        if any(pattern in url for pattern in comment_api_patterns):
+            try:
+                data = response.json()
+                comments_data = data.get("comments", [])
+                if not comments_data:
+                    # Một số phiên bản API trả về trong "comment"
+                    comments_data = data.get("comment", [])
+
+                for c in comments_data:
+                    self._api_comments.append(c)
+                    username = c.get("user", {}).get("nickname", "")
+                    if not username:
+                        username = c.get("user", {}).get("unique_id", "")
+                    text = c.get("text", "")
+                    create_time = c.get("create_time", "")
+
+                    # Chuyển timestamp sang dạng đọc được
+                    time_str = ""
+                    if create_time:
+                        try:
+                            time_str = datetime.fromtimestamp(int(create_time)).strftime("%Y-%m-%d %H:%M:%S")
+                        except (ValueError, TypeError, OSError):
+                            time_str = str(create_time)
+
+                    if text:
+                        comment = Comment(
+                            platform="TikTok",
+                            username=username,
+                            text=text,
+                            timestamp=time_str,
+                        )
+                        self.comments.append(comment)
+
+                if comments_data:
+                    print(f"  📡 Bắt được {len(comments_data)} bình luận từ API (tổng: {len(self.comments)})")
+
+            except Exception:
+                pass
+
+    def _extract_from_sigi_state(self, page: Page):
+        """
+        Phương pháp dự phòng: Trích xuất từ SIGI_STATE (hydration data).
+        TikTok nhúng dữ liệu JSON vào thẻ script trong HTML.
+        """
+        print("  🔄 Thử trích xuất từ SIGI_STATE / __UNIVERSAL_DATA_FOR_REHYDRATION__...")
+        try:
+            sigi_data = page.evaluate("""
+                () => {
+                    // Thử SIGI_STATE
+                    const sigi = document.querySelector('#SIGI_STATE');
+                    if (sigi) return JSON.parse(sigi.textContent);
+
+                    // Thử __UNIVERSAL_DATA_FOR_REHYDRATION__
+                    const universal = document.querySelector('#__UNIVERSAL_DATA_FOR_REHYDRATION__');
+                    if (universal) return JSON.parse(universal.textContent);
+
+                    // Thử tìm trong script tags
+                    const scripts = document.querySelectorAll('script[type="application/json"]');
+                    for (const s of scripts) {
+                        try {
+                            const data = JSON.parse(s.textContent);
+                            if (data && (data.CommentItem || data.comments || data.ItemModule)) {
+                                return data;
+                            }
+                        } catch(e) {}
+                    }
+                    return null;
+                }
+            """)
+
+            if not sigi_data:
+                return
+
+            # Tìm comments trong cấu trúc SIGI_STATE
+            comment_items = {}
+            if "CommentItem" in sigi_data:
+                comment_items = sigi_data["CommentItem"]
+            elif "comments" in sigi_data:
+                comment_items = sigi_data["comments"]
+
+            # Tìm user data
+            user_items = {}
+            if "UserModule" in sigi_data:
+                user_items = sigi_data["UserModule"].get("users", {})
+
+            if isinstance(comment_items, dict):
+                for cid, cdata in comment_items.items():
+                    text = cdata.get("text", "")
+                    uid = cdata.get("user", "")
+                    username = ""
+
+                    if isinstance(uid, dict):
+                        username = uid.get("nickname", uid.get("unique_id", ""))
+                    elif isinstance(uid, str) and uid in user_items:
+                        username = user_items[uid].get("nickname", uid)
+                    else:
+                        username = str(uid) if uid else ""
+
+                    create_time = cdata.get("create_time", "")
+                    time_str = ""
+                    if create_time:
+                        try:
+                            time_str = datetime.fromtimestamp(int(create_time)).strftime("%Y-%m-%d %H:%M:%S")
+                        except (ValueError, TypeError, OSError):
+                            time_str = str(create_time)
+
+                    if text:
+                        comment = Comment(
+                            platform="TikTok",
+                            username=username,
+                            text=text,
+                            timestamp=time_str,
+                        )
+                        self.comments.append(comment)
+
+            elif isinstance(comment_items, list):
+                for cdata in comment_items:
+                    text = cdata.get("text", "")
+                    user_data = cdata.get("user", {})
+                    username = ""
+                    if isinstance(user_data, dict):
+                        username = user_data.get("nickname", user_data.get("unique_id", ""))
+
+                    create_time = cdata.get("create_time", "")
+                    time_str = ""
+                    if create_time:
+                        try:
+                            time_str = datetime.fromtimestamp(int(create_time)).strftime("%Y-%m-%d %H:%M:%S")
+                        except (ValueError, TypeError, OSError):
+                            time_str = str(create_time)
+
+                    if text:
+                        comment = Comment(
+                            platform="TikTok",
+                            username=username,
+                            text=text,
+                            timestamp=time_str,
+                        )
+                        self.comments.append(comment)
+
+            if self.comments:
+                print(f"  ✅ Trích xuất được {len(self.comments)} bình luận từ hydration data")
+
+        except Exception as e:
+            print(f"  ⚠️  Không lấy được dữ liệu từ SIGI_STATE: {e}")
+
+    def _extract_from_dom(self, page: Page):
+        """
+        Phương pháp dự phòng cuối: Dùng JavaScript thông minh để quét DOM.
+        Tìm các cụm text có cấu trúc giống bình luận (username + nội dung).
+        """
+        print("  🔄 Thử trích xuất trực tiếp từ DOM...")
+        try:
+            dom_comments = page.evaluate("""
+                () => {
+                    const results = [];
+
+                    // Tìm comment container bằng nhiều cách
+                    const selectors = [
+                        '[data-e2e="comment-list-item"]',
+                        '[class*="CommentItem"]',
+                        '[class*="comment-item"]',
+                        '[class*="DivCommentItem"]',
+                        '[class*="CommentContent"]',
+                    ];
+
+                    let items = [];
+                    for (const sel of selectors) {
+                        items = document.querySelectorAll(sel);
+                        if (items.length > 0) break;
+                    }
+
+                    // Nếu tìm thấy comment items
+                    if (items.length > 0) {
+                        for (const item of items) {
+                            // Tìm username (thường là link hoặc thẻ có class chứa "user")
+                            let username = '';
+                            const userEls = item.querySelectorAll(
+                                'a[href*="/@"], [class*="user"] a, [data-e2e*="username"], ' +
+                                'span[class*="User"], a[class*="StyledLink"]'
+                            );
+                            for (const uel of userEls) {
+                                const t = uel.textContent?.trim();
+                                if (t && t.length > 0 && t.length < 50) {
+                                    username = t;
+                                    break;
+                                }
+                            }
+
+                            // Tìm nội dung bình luận (thường là p hoặc span)
+                            let text = '';
+                            const textEls = item.querySelectorAll(
+                                'p[class*="Comment"], span[class*="Comment"], ' +
+                                '[data-e2e*="comment-level"] p, ' +
+                                'p[class*="text"], span[class*="text"]'
+                            );
+                            for (const tel of textEls) {
+                                const t = tel.textContent?.trim();
+                                if (t && t.length > 0) {
+                                    text = t;
+                                    break;
+                                }
+                            }
+
+                            // Nếu vẫn không tìm thấy text, lấy text trực tiếp
+                            if (!text) {
+                                const allText = item.innerText?.trim();
+                                if (allText) {
+                                    // Tách username ra khỏi nội dung
+                                    const lines = allText.split('\\n').filter(l => l.trim());
+                                    if (lines.length >= 2) {
+                                        if (!username) username = lines[0];
+                                        // Bỏ username, thời gian ngắn, lấy phần nội dung
+                                        text = lines.filter((l, i) => {
+                                            if (i === 0) return false; // skip username
+                                            if (l.match(/^\\d+[smhdw]|ago|trước|giờ|phút|ngày/)) return false;
+                                            if (l.match(/^Reply|Trả lời|Like|\\d+$/)) return false;
+                                            return l.length > 1;
+                                        }).join(' ').trim();
+                                    }
+                                }
+                            }
+
+                            // Tìm thời gian
+                            let timeStr = '';
+                            const timeEls = item.querySelectorAll(
+                                '[data-e2e*="time"], [class*="Time"], [class*="time"], ' +
+                                'span[class*="Created"]'
+                            );
+                            for (const tel of timeEls) {
+                                const t = tel.textContent?.trim();
+                                if (t && t.length < 30) {
+                                    timeStr = t;
+                                    break;
+                                }
+                            }
+
+                            if (text && text.length > 0) {
+                                results.push({username, text, time: timeStr});
+                            }
+                        }
+                    }
+
+                    return results;
+                }
+            """)
+
+            for item in dom_comments:
+                comment = Comment(
+                    platform="TikTok",
+                    username=item.get("username", ""),
+                    text=item.get("text", ""),
+                    timestamp=item.get("time", ""),
+                )
+                if comment.is_valid():
+                    self.comments.append(comment)
+
+            if dom_comments:
+                print(f"  ✅ Trích xuất được {len(dom_comments)} bình luận từ DOM")
+
+        except Exception as e:
+            print(f"  ⚠️  Lỗi khi quét DOM: {e}")
+
+    def scrape(self, url: str) -> list[Comment]:
+        """Quy trình bốc tách bình luận TikTok."""
+        print("=" * 65)
+        print("  🚀 TIKTOK COMMENT SCRAPER (API Interception)")
+        print("=" * 65)
+        print(f"  🔗 URL: {url}")
+        print()
+
+        with sync_playwright() as p:
+            # Mở trình duyệt
+            print("  [1/4] 🌐 Đang mở trình duyệt Chrome...")
+            browser = p.chromium.launch(
+                headless=self.headless,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--window-size=1366,768",
+                ]
+            )
+
+            context = browser.new_context(
+                viewport={"width": 1366, "height": 768},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                locale="vi-VN",
+                timezone_id="Asia/Ho_Chi_Minh",
+            )
+
+            # Ẩn dấu hiệu automation
+            context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => false });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['vi-VN', 'vi', 'en-US', 'en'] });
+            """)
+
+            page = context.new_page()
+
+            # Đăng ký bắt API response TRƯỚC khi load trang
+            print("  [2/4] 📡 Đăng ký bắt API bình luận...")
+            page.on("response", self._on_response)
+
+            # Truy cập URL
+            print("  [3/4] 📄 Đang tải trang TikTok...")
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                self.human.random_delay(3.0, 5.0)
+                print("  ✅ Trang đã tải xong")
+            except Exception as e:
+                print(f"  ❌ Lỗi khi tải trang: {e}")
+                browser.close()
+                return []
+
+            # Cuộn trang để trigger load thêm bình luận
+            print("  [4/4] 📜 Đang cuộn trang để tải thêm bình luận...")
+
+            # Tìm và cuộn vào vùng comment
+            try:
+                comment_area = page.query_selector(
+                    '[data-e2e="comment-list"], '
+                    '[class*="CommentList"], '
+                    '[class*="comment-list"]'
+                )
+                if comment_area:
+                    comment_area.scroll_into_view_if_needed()
+                    self.human.random_delay(1.0, 2.0)
+            except Exception:
+                pass
+
+            # Cuộn nhiều lần để load thêm bình luận
+            for i in range(self.max_scrolls):
+                self.human.smooth_scroll(page, random.randint(300, 600))
+                self.human.random_delay(1.0, 2.5)
+
+                # Thử bấm nút "Xem thêm bình luận"
+                try:
+                    for btn_text in ["View more comments", "Xem thêm bình luận",
+                                     "View more", "Xem thêm"]:
+                        btn = page.query_selector(f"text='{btn_text}'")
+                        if btn and btn.is_visible():
+                            btn.click()
+                            self.human.random_delay(1.5, 3.0)
+                            print(f"  👆 Đã bấm '{btn_text}'")
+                            break
+                except Exception:
+                    pass
+
+                if (i + 1) % 5 == 0:
+                    print(f"  📜 Đã cuộn {i + 1}/{self.max_scrolls} lần | Bình luận: {len(self.comments)}")
+
+            # Nếu API không bắt được gì, thử các phương pháp dự phòng
+            if not self.comments:
+                self._extract_from_sigi_state(page)
+
+            if not self.comments:
+                self._extract_from_dom(page)
+
+            # Loại bỏ trùng lặp
+            seen = set()
+            unique = []
+            for c in self.comments:
+                key = (c.username, c.text)
+                if key not in seen:
+                    seen.add(key)
+                    unique.append(c)
+            self.comments = unique
+
+            print()
+            print("=" * 65)
+            print(f"  🎉 HOÀN TẤT! Đã trích xuất {len(self.comments)} bình luận TikTok")
+            print("=" * 65)
+
+            browser.close()
+
+        return self.comments
+
+
+# =============================================================================
+# COMMENT SCRAPER CHÍNH (cho Shopee, Tiki, Facebook)
 # =============================================================================
 
 class CommentScraper:
@@ -452,6 +864,16 @@ class CommentScraper:
         Returns:
             Danh sách các Comment đã trích xuất
         """
+        # --- Nếu là TikTok, dùng TikTokScraper riêng ---
+        if self.platform == "tiktok":
+            tiktok_scraper = TikTokScraper(
+                headless=self.headless,
+                max_scrolls=self.max_scrolls,
+            )
+            self.comments = tiktok_scraper.scrape(url)
+            return self.comments
+
+        # --- Quy trình cho Shopee, Tiki, Facebook ---
         print("=" * 65)
         print(f"  🚀 COMMENT SCRAPER - Nền tảng: {self.config['name']}")
         print("=" * 65)

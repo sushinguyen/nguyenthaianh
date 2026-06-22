@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 from underthesea import word_tokenize
+import os
 
 
 def clean_text(text):
@@ -16,12 +17,20 @@ def clean_text(text):
         text = word_tokenize(text, format="text")   # format="text" tạo dấu gạch dưới: giao_hàng
         return text
 
-df = pd.read_csv("data.csv", encoding = "utf-8")
+current_dir = os.path.dirname(__file__)
+file_path = os.path.join(current_dir, "data.csv")
+output_path = os.path.join(current_dir, "data_clean.csv")
+
+df = pd.read_csv(file_path, encoding="utf-8")
+
 ten_cot_can_lam_sach = "noi_dung"
 
-#goi ham de xu ly 
-print("--- KIỂM TRA DỮ LIỆU SAU KHI LÀM SẠCH ---")
+#goi ham de xu ly
+df["NoiDung_Da_Tach_Tu"] = df[ten_cot_can_lam_sach].apply(clean_text)
+
+print("KIỂM TRA DỮ LIỆU SAU KHI LÀM SẠCH ")
 print(df[[ten_cot_can_lam_sach, "NoiDung_Da_Tach_Tu"]].head())
-#xuat data da xu ly ra file data clean
-df.to_csv("data_clean.csv", index=False, encoding="utf-8-sig")
+
+# Xuất thẳng dữ liệu đã xử lý vào file data_clean.csv trong thư mục naive bayes
+df.to_csv(output_path, index=False, encoding="utf-8-sig")
 print("\n[Thành công] Đã lưu dữ liệu sạch vào file 'data_clean.csv'!")
