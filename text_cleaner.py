@@ -38,3 +38,38 @@ def doc_file_cam_xuc(file_path):
 x, y = doc_file_cam_xuc("data1.txt")
 print("Danh sách bình luận:", x)
 print("Danh sách cảm xúc:", y)
+
+import re
+
+
+def lam_sach_van_ban(text):
+    # 1. Chuyển thành chữ thường
+    text = text.lower()
+    # 2. Xóa các ký tự đặc biệt, dấu câu, icon (chỉ giữ lại chữ, số và khoảng trắng)
+    text = re.sub(r"[^\w\s]", "", text)
+    # 3. Xóa khoảng trắng thừa ở giữa và 2 đầu câu
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def xu_ly_va_luu_file(input_path, output_path):
+    with open(input_path, "r", encoding="utf-8") as f_in, open(
+        output_path, "w", encoding="utf-8"
+    ) as f_out:
+
+        for line in f_in:
+            if "|" in line:
+                cau, nhan = line.split("|")
+
+                # Làm sạch bình luận và chuẩn hóa nhãn
+                cau_sach = lam_sach_van_ban(cau)
+                nhan_sach = nhan.strip()
+
+                # Chỉ ghi vào file mới nếu câu sau khi xử lý không bị rỗng
+                if cau_sach:
+                    f_out.write(f"{cau_sach} | {nhan_sach}\n")
+
+
+# === CHẠY LỆNH CHUYỂN ĐỔI ===
+xu_ly_va_luu_file("data1.txt", "data1_cleaner.txt")
+print("Đã xử lý dữ liệu thô và lưu thành công sang file 'data1_cleaner.txt'!")
