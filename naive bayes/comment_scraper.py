@@ -583,19 +583,24 @@ class CommentScraper:
 
         return self.comments
 
-    def save_to_csv(self, filepath: str):
-        """Lưu bình luận ra file CSV."""
+    def save_to_csv(self, filepath: str = "data.csv"):
+        """Lưu bình luận ra file CSV với các cột: stt, ten_tai_khoan, noi_dung, thoi_gian."""
         if not self.comments:
             print("  ⚠️  Không có bình luận để lưu!")
             return
 
         with open(filepath, "w", encoding="utf-8-sig", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=[
-                "platform", "username", "text", "rating", "timestamp", "scraped_at"
+                "stt", "ten_tai_khoan", "noi_dung", "thoi_gian"
             ])
             writer.writeheader()
-            for comment in self.comments:
-                writer.writerow(asdict(comment))
+            for idx, comment in enumerate(self.comments, start=1):
+                writer.writerow({
+                    "stt": idx,
+                    "ten_tai_khoan": comment.username or "(ẩn danh)",
+                    "noi_dung": comment.text,
+                    "thoi_gian": comment.timestamp or "",
+                })
 
         print(f"  💾 Đã lưu {len(self.comments)} bình luận vào: {filepath}")
 
@@ -671,8 +676,8 @@ Ví dụ sử dụng:
     )
     parser.add_argument(
         "--output", "-o",
-        default=None,
-        help="File đầu ra (.csv hoặc .json). Mặc định: comments_<platform>_<timestamp>.csv"
+        default="data.csv",
+        help="File đầu ra (.csv hoặc .json). Mặc định: data.csv"
     )
     parser.add_argument(
         "--headless",
@@ -710,9 +715,6 @@ Ví dụ sử dụng:
 
         # Xác định file đầu ra
         output_file = args.output
-        if not output_file:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"comments_{args.platform}_{timestamp}.csv"
 
         # Lưu file
         if output_file.endswith(".json"):
