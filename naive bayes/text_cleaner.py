@@ -34,3 +34,4 @@ print(df[[ten_cot_can_lam_sach, "NoiDung_Da_Tach_Tu"]].head())
 
 df.to_csv(output_path, index=False, encoding="utf-8-sig")
 print("\n[Thành công] Đã lưu dữ liệu sạch vào file 'data_clean.csv'!")
+
