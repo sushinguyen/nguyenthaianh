@@ -1,17 +1,17 @@
-# MÔ TẢ DỰ ÁN — Naive Bayes Comment Analysis
+# 📋 MÔ TẢ DỰ ÁN — Naive Bayes Comment Analysis
 
 ## Tổng quan
 
-Hệ thống bốc tách bình luận tự động từ các nền tảng (Shopee, Tiki, Facebook, TikTok)
-bằng trình duyệt ảo Playwright, sau đó làm sạch dữ liệu qua nhiều bước để chuẩn bị
-cho mô hình phân loại Naive Bayes.
+Hệ thống bốc tách bình luận tự động từ **Facebook** và **TikTok**
+bằng trình duyệt ảo Playwright, sau đó làm sạch dữ liệu qua nhiều bước
+để chuẩn bị cho mô hình phân loại Naive Bayes.
 
 ---
 
 ## Sơ đồ Pipeline
 
 ```
-[Nguồn: Shopee, Facebook, TikTok, Tiki...]
+[Nguồn: Facebook, TikTok]
        │
        ├─── LUỒNG CSV ──────────────────────────────────────────────
        │    comment_scraper.py
@@ -70,9 +70,18 @@ cho mô hình phân loại Naive Bayes.
 
 ---
 
+## Nền tảng hỗ trợ
+
+| Nền tảng   | Loại nội dung        |
+|------------|----------------------|
+| Facebook   | Bài viết, bình luận  |
+| TikTok     | Video, bình luận     |
+
+---
+
 ## Lưu ý quan trọng
 
->  Dữ liệu trong `.csv` và `.txt` là **KHÁC NHAU**, được xử lý qua **2 luồng riêng biệt**.
+> ⚠️ Dữ liệu trong `.csv` và `.txt` là **KHÁC NHAU**, được xử lý qua **2 luồng riêng biệt**.
 > - Luồng CSV: `comment_scraper.py` → `text_cleaner.py` / `stopword.py`
 > - Luồng TXT: `comment_extractor.py` (tích hợp sẵn clean + stopword)
 
@@ -82,7 +91,8 @@ cho mô hình phân loại Naive Bayes.
 
 ```bash
 # --- LUỒNG CSV ---
-python comment_scraper.py --url "https://tiktok.com/..." --platform tiktok
+python comment_scraper.py --url "https://facebook.com/post/123" --platform facebook
+python comment_scraper.py --url "https://tiktok.com/@user/video/456" --platform tiktok
 # → Xuất: data.csv
 
 python text_cleaner.py
@@ -92,6 +102,7 @@ python stopword.py
 # → Xuất: data_clean1.csv + data_clean1.txt
 
 # --- LUỒNG TXT ---
-python comment_extractor.py --url "https://tiktok.com/..." --platform tiktok
+python comment_extractor.py --url "https://facebook.com/post/123" --platform facebook
+python comment_extractor.py --url "https://tiktok.com/@user/video/456" --platform tiktok
 # → Xuất: data1.txt, data_clean.txt, data_clean1.txt (tự động cả 3)
 ```

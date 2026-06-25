@@ -10,20 +10,21 @@ Module này tái sử dụng CommentScraper từ comment_scraper.py (toàn bộ 
 mở trình duyệt, cuộn trang, bấm nút, bốc tách) và chỉ thay đổi định dạng
 đầu ra: thay vì CSV → lưu ra file TXT chỉ chứa nội dung bình luận.
 xử lý file txt
+Hỗ trợ: Facebook, TikTok
+
 Cài đặt:
     pip install playwright pandas
     playwright install chromium
 
 Sử dụng:
-    python comment_extractor.py --url "https://shopee.vn/..." --platform shopee
-    python comment_extractor.py --url "https://tiki.vn/..." --platform tiki
     python comment_extractor.py --url "https://www.facebook.com/..." --platform facebook
     python comment_extractor.py --url "https://www.tiktok.com/..." --platform tiktok
-    python comment_extractor.py --url "https://shopee.vn/..." --platform shopee --output binh_luan.txt
-    python comment_extractor.py --url "https://shopee.vn/..." --platform shopee --max-scrolls 50
+    python comment_extractor.py --url "https://facebook.com/..." --platform facebook --output binh_luan.txt
+    python comment_extractor.py --url "https://tiktok.com/..." --platform tiktok --max-scrolls 50
 
 Đầu ra mặc định: data1.txt (mỗi dòng là nội dung 1 bình luận)
 """
+
 
 import argparse
 import sys
@@ -222,19 +223,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ví dụ sử dụng:
-  python comment_extractor.py --url "https://shopee.vn/product/123" --platform shopee
-  python comment_extractor.py --url "https://tiki.vn/product/456" --platform tiki
+  python comment_extractor.py --url "https://facebook.com/post/789" --platform facebook
   python comment_extractor.py --url "https://facebook.com/post/789" --platform facebook --headless
   python comment_extractor.py --url "https://tiktok.com/@user/video/012" --platform tiktok
-  python comment_extractor.py --url "https://shopee.vn/..." --platform shopee --output binh_luan.txt --max-scrolls 50
+  python comment_extractor.py --url "https://tiktok.com/@user/video/012" --platform tiktok --output binh_luan.txt --max-scrolls 50
 
 Quy trình hoạt động:
   1. Mở trình duyệt Chrome ảo (Playwright)
-  2. Truy cập URL sản phẩm / bài viết
+  2. Truy cập URL bài viết / video
   3. Tự động cuộn chuột xuống cuối trang (giống người thật)
   4. Tự động bấm nút "Xem thêm bình luận" liên tục
   5. Bốc tách toàn bộ nội dung bình luận
-  6. Lưu vào file data1.txt (mỗi dòng = 1 bình luận)
+  6. Lưu vào file data1.txt, data_clean.txt, data_clean1.txt
         """
     )
 

@@ -1,23 +1,21 @@
 """
 =============================================================================
-COMMENT SCRAPER - Bốc tách bình luận tự động từ các trang TMĐT & Mạng xã hội
+COMMENT SCRAPER - Bốc tách bình luận tự động từ Mạng xã hội
 =============================================================================
 Sử dụng Playwright để mở trình duyệt Chrome ảo, tự động cuộn trang,
 bấm nút "Xem thêm bình luận" như người thật, sau đó trích xuất toàn bộ text.
 xử lý file csv
-Hỗ trợ: Shopee, Tiki, Facebook, TikTok
+Hỗ trợ: Facebook, TikTok
 
 Cài đặt:
     pip install playwright pandas
     playwright install chromium
 
 Sử dụng:
-    python comment_scraper.py --url "https://shopee.vn/..." --platform shopee
-    python comment_scraper.py --url "https://tiki.vn/..." --platform tiki
     python comment_scraper.py --url "https://www.facebook.com/..." --platform facebook
     python comment_scraper.py --url "https://www.tiktok.com/..." --platform tiktok
-    python comment_scraper.py --url "https://shopee.vn/..." --platform shopee --output comments.csv
-    python comment_scraper.py --url "https://shopee.vn/..." --platform shopee --max-scrolls 50
+    python comment_scraper.py --url "https://facebook.com/..." --platform facebook --output comments.csv
+    python comment_scraper.py --url "https://tiktok.com/..." --platform tiktok --max-scrolls 50
 """
 
 import argparse
@@ -38,58 +36,6 @@ from playwright.sync_api import sync_playwright, Page, ElementHandle
 # =============================================================================
 
 PLATFORM_CONFIG = {
-    "shopee": {
-        "name": "Shopee",
-        # Selector cho khu vực bình luận
-        "comment_section": ".product-ratings",
-        # Selector cho từng bình luận
-        "comment_items": ".shopee-product-rating",
-        # Selector cho nội dung bình luận
-        "comment_text": ".shopee-product-rating__main-comment, .r4A3wf",
-        # Selector cho tên người dùng
-        "username": ".shopee-product-rating__author-name, .r4A3wf + div",
-        # Selector cho rating (số sao)
-        "rating": ".shopee-product-rating__rating",
-        # Selector cho thời gian
-        "timestamp": ".shopee-product-rating__time, .r4A3wf",
-        # Nút "Xem thêm bình luận" hoặc phân trang
-        "load_more_buttons": [
-            "button.product-ratings__page-next",
-            ".shopee-icon-button--right",
-            "button:has-text('Trang sau')",
-            "button:has-text('Next')",
-        ],
-        # Nút "Xem thêm" trong từng bình luận (mở rộng text dài)
-        "expand_buttons": [
-            "button:has-text('Xem thêm')",
-            "button:has-text('See more')",
-            "a:has-text('Xem thêm')",
-        ],
-        "wait_selector": ".product-ratings, .product-rating-overview",
-        "scroll_target": ".product-ratings",
-    },
-    "tiki": {
-        "name": "Tiki",
-        "comment_section": ".review-comment",
-        "comment_items": ".review-comment__list .review-comment__item, .style__ReviewCommentItemStyle-sc",
-        "comment_text": ".review-comment__content, .review-comment__text",
-        "username": ".review-comment__user-name, .review-comment__user-info__name",
-        "rating": ".review-comment__rating",
-        "timestamp": ".review-comment__created-date",
-        "load_more_buttons": [
-            "button:has-text('Xem thêm')",
-            "button:has-text('Xem thêm đánh giá')",
-            ".review-comment__load-more button",
-            "a:has-text('Xem thêm nhận xét')",
-            "p:has-text('Xem thêm')",
-        ],
-        "expand_buttons": [
-            "span:has-text('Xem thêm')",
-            "a:has-text('Xem thêm')",
-        ],
-        "wait_selector": ".review-comment, .customer-reviews",
-        "scroll_target": ".review-comment, .customer-reviews",
-    },
     "facebook": {
         "name": "Facebook",
         "comment_section": "[role='complementary'], .x1n2onr6",
@@ -647,14 +593,14 @@ class CommentScraper:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🕷️ Comment Scraper - Bốc tách bình luận tự động",
+        description="🕷️ Comment Scraper - Bốc tách bình luận tự động từ Facebook & TikTok",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ví dụ sử dụng:
-  python comment_scraper.py --url "https://shopee.vn/product/123" --platform shopee
-  python comment_scraper.py --url "https://tiki.vn/product/456" --platform tiki --output reviews.csv
+  python comment_scraper.py --url "https://facebook.com/post/789" --platform facebook
   python comment_scraper.py --url "https://facebook.com/post/789" --platform facebook --headless
-  python comment_scraper.py --url "https://tiktok.com/@user/video/012" --platform tiktok --max-scrolls 50
+  python comment_scraper.py --url "https://tiktok.com/@user/video/012" --platform tiktok
+  python comment_scraper.py --url "https://tiktok.com/@user/video/012" --platform tiktok --output reviews.csv --max-scrolls 50
         """
     )
 
