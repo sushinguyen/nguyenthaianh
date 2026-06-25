@@ -1,4 +1,4 @@
-# 📋 MÔ TẢ DỰ ÁN — Naive Bayes Comment Analysis
+# MÔ TẢ DỰ ÁN — Naive Bayes Comment Analysis
 
 ## Tổng quan
 
@@ -72,7 +72,7 @@ cho mô hình phân loại Naive Bayes.
 
 ## Lưu ý quan trọng
 
-> ⚠️ Dữ liệu trong `.csv` và `.txt` là **KHÁC NHAU**, được xử lý qua **2 luồng riêng biệt**.
+>  Dữ liệu trong `.csv` và `.txt` là **KHÁC NHAU**, được xử lý qua **2 luồng riêng biệt**.
 > - Luồng CSV: `comment_scraper.py` → `text_cleaner.py` / `stopword.py`
 > - Luồng TXT: `comment_extractor.py` (tích hợp sẵn clean + stopword)
 
