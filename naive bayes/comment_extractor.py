@@ -9,7 +9,7 @@ bình luận (tên tài khoản, rating, nội dung, thời gian) và lưu vào 
 Module này tái sử dụng CommentScraper từ comment_scraper.py (toàn bộ logic
 mở trình duyệt, cuộn trang, bấm nút, bốc tách) và chỉ thay đổi định dạng
 đầu ra: thay vì CSV → lưu ra file TXT chỉ chứa nội dung bình luận.
-
+xử lý file txt
 Cài đặt:
     pip install playwright pandas
     playwright install chromium
@@ -28,6 +28,8 @@ Sử dụng:
 import argparse
 import sys
 import os
+import re
+import json
 
 # Import CommentScraper và cấu hình từ comment_scraper.py
 from comment_scraper import CommentScraper, PLATFORM_CONFIG
@@ -93,6 +95,118 @@ def save_comments_to_txt(comments: list, output_path: str = "data1.txt") -> int:
 
     print(f"  💾 Đã lưu {len(valid_comments)} bình luận vào: {output_path}")
     return len(valid_comments)
+
+
+# =============================================================================
+# XỬ LÝ CLEAN CƠ BẢN → data_clean.txt
+# =============================================================================
+
+def clean_text_basic(text: str) -> str:
+    """
+    Xử lý đơn giản: in thường, xóa dấu câu, chuẩn hóa khoảng trắng.
+    Giữ nguyên nghĩa gốc của bình luận.
+    """
+    if not isinstance(text, str):
+        return ""
+    # 1. Chuyển thành chữ thường
+    text = text.lower()
+    # 2. Xóa emoji (Unicode emoji ranges)
+    text = re.sub(
+        r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF'
+        r'\U0001F1E0-\U0001F1FF\U00002702-\U000027B0\U0000FE00-\U0000FE0F'
+        r'\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF'
+        r'\U00002600-\U000026FF\U00002700-\U000027BF]+',
+        '', text
+    )
+    # 3. Xóa các ký tự đặc biệt, dấu câu (giữ lại chữ, số, khoảng trắng)
+    text = re.sub(r'[^\w\s]', '', text)
+    # 4. Xóa khoảng trắng thừa
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def save_clean_txt(comments: list, output_path: str = "data_clean.txt") -> int:
+    """
+    Lưu bình luận đã xử lý cơ bản (in thường, xóa dấu câu, khoảng trắng)
+    vào file TXT. Bỏ qua bình luận rỗng sau khi clean.
+
+    Args:
+        comments: Danh sách Comment objects
+        output_path: Đường dẫn file TXT đầu ra (mặc định: data_clean.txt)
+
+    Returns:
+        Số lượng bình luận đã lưu
+    """
+    count = 0
+    with open(output_path, "w", encoding="utf-8") as f:
+        for comment in comments:
+            if not hasattr(comment, "text") or not comment.text.strip():
+                continue
+            cleaned = clean_text_basic(comment.text)
+            if cleaned:  # Bỏ qua nếu sau khi clean thành rỗng
+                f.write(cleaned + "\n")
+                count += 1
+
+    print(f"  💾 Đã lưu {count} bình luận (đã clean) vào: {output_path}")
+    return count
+
+
+# =============================================================================
+# XỬ LÝ STOPWORD → data_clean1.txt
+# =============================================================================
+
+def load_stopwords(json_path: str) -> set:
+    """Tải danh sách stopwords từ file JSON."""
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            return set(json.load(f))
+    except FileNotFoundError:
+        print(f"  ⚠️  Không tìm thấy file stopwords: {json_path}")
+        return set()
+
+
+def remove_stopwords(text: str, stopword_set: set) -> str:
+    """Loại bỏ stopwords khỏi chuỗi text."""
+    if not isinstance(text, str):
+        return ""
+    words = text.split()
+    filtered = [w for w in words if w not in stopword_set]
+    return " ".join(filtered)
+
+
+def save_stopword_txt(comments: list, output_path: str = "data_clean1.txt") -> int:
+    """
+    Lưu bình luận đã qua clean cơ bản + loại bỏ stopword vào file TXT.
+
+    Args:
+        comments: Danh sách Comment objects
+        output_path: Đường dẫn file TXT đầu ra (mặc định: data_clean1.txt)
+
+    Returns:
+        Số lượng bình luận đã lưu
+    """
+    # Tải stopwords từ file JSON cùng thư mục
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    stopword_path = os.path.join(current_dir, "stopwords-vi.json")
+    stopword_set = load_stopwords(stopword_path)
+
+    count = 0
+    with open(output_path, "w", encoding="utf-8") as f:
+        for comment in comments:
+            if not hasattr(comment, "text") or not comment.text.strip():
+                continue
+            # Bước 1: Clean cơ bản (in thường, xóa dấu câu, khoảng trắng)
+            cleaned = clean_text_basic(comment.text)
+            if not cleaned:
+                continue
+            # Bước 2: Loại bỏ stopwords
+            final = remove_stopwords(cleaned, stopword_set)
+            if final:  # Bỏ qua nếu sau khi lọc stopword thành rỗng
+                f.write(final + "\n")
+                count += 1
+
+    print(f"  💾 Đã lưu {count} bình luận (đã lọc stopword) vào: {output_path}")
+    return count
 
 
 # =============================================================================
@@ -205,13 +319,24 @@ Quy trình hoạt động:
             print(f"  ... và {len(comments) - args.preview} bình luận khác")
         print()
 
-        # Lưu vào file TXT
+        # ---- Lưu data1.txt (dữ liệu thô, đầy đủ) ----
         count = save_comments_to_txt(comments, args.output)
+
+        # ---- Lưu data_clean.txt (clean cơ bản: in thường, dấu câu, khoảng trắng) ----
+        print()
+        print("  🧹 Đang xử lý clean cơ bản...")
+        clean_count = save_clean_txt(comments, "data_clean.txt")
+
+        # ---- Lưu data_clean1.txt (clean + loại bỏ stopword) ----
+        print("  🔍 Đang loại bỏ stopwords...")
+        stopword_count = save_stopword_txt(comments, "data_clean1.txt")
 
         print()
         print("=" * 65)
-        print(f"  🎉 HOÀN TẤT! {count} bình luận đã được lưu vào {args.output}")
-        print(f"  💡 File chứa đầy đủ: tên tài khoản, rating, nội dung, thời gian.")
+        print(f"  🎉 HOÀN TẤT! Pipeline xử lý TXT hoàn thành:")
+        print(f"     📄 {args.output:<20s} → {count} bình luận (dữ liệu thô)")
+        print(f"     🧹 data_clean.txt       → {clean_count} bình luận (đã clean)")
+        print(f"     🔍 data_clean1.txt      → {stopword_count} bình luận (đã lọc stopword)")
         print("=" * 65)
     else:
         print()

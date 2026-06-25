@@ -4,7 +4,7 @@ COMMENT SCRAPER - Bốc tách bình luận tự động từ các trang TMĐT & 
 =============================================================================
 Sử dụng Playwright để mở trình duyệt Chrome ảo, tự động cuộn trang,
 bấm nút "Xem thêm bình luận" như người thật, sau đó trích xuất toàn bộ text.
-
+xử lý file csv
 Hỗ trợ: Shopee, Tiki, Facebook, TikTok
 
 Cài đặt:
@@ -671,8 +671,8 @@ Ví dụ sử dụng:
     )
     parser.add_argument(
         "--output", "-o",
-        default=None,
-        help="File đầu ra (.csv hoặc .json). Mặc định: comments_<platform>_<timestamp>.csv"
+        default="data.csv",
+        help="File đầu ra (.csv hoặc .json). Mặc định: data.csv"
     )
     parser.add_argument(
         "--headless",
@@ -710,9 +710,6 @@ Ví dụ sử dụng:
 
         # Xác định file đầu ra
         output_file = args.output
-        if not output_file:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"comments_{args.platform}_{timestamp}.csv"
 
         # Lưu file
         if output_file.endswith(".json"):
