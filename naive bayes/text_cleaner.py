@@ -1,65 +1,101 @@
+"""
+=============================================================================
+TEXT CLEANER — Làm sạch dữ liệu CSV + Chuẩn hoá teen code
+=============================================================================
+Đọc data.csv, xử lý qua 2 bước:
+  Bước 1: Làm sạch cơ bản (in thường, xóa emoji, dấu câu, khoảng trắng)
+  Bước 2: Chuẩn hoá teen code ("ko" → "không", "dc" → "được", ...)
+
+Đầu ra: data_clean.csv (giữ nguyên nghĩa, chỉ chuẩn hoá)
+
+Sử dụng:
+    python text_cleaner.py
+"""
+
 import os
 import re
-import json
+import sys
 import pandas as pd
 
-# ==========================================
-# 1. HÀM TẢI STOPWORDS TỪ FILE JSON
-# ==========================================
-def load_stopwords(file_path):
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return set(json.load(f)) # Chuyển thành set để xử lý cực nhanh
-    except FileNotFoundError:
-        print(f"Lỗi: Không tìm thấy file stopwords tại {file_path}")
-        return set()
+# Fix encoding cho Windows console
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
 
-# Lấy thư mục hiện tại để đường dẫn luôn chuẩn
-current_dir = os.path.dirname(__file__)
-stopword_path = os.path.join(current_dir, "stopwords-vi.json")
-file_path = os.path.join(current_dir, "data.csv")
-output_path = os.path.join(current_dir, "data_clean1.csv")
-
-# Tải danh sách stopwords vào biến
-tap_stopwords = load_stopwords(stopword_path)
+# Import module chuẩn hoá teen code
+from teen_code import normalize_teen_code
 
 
 # ==========================================
-# 2. HÀM LÀM SẠCH & LOẠI BỎ STOPWORD
+# 1. HÀM LÀM SẠCH CƠ BẢN
 # ==========================================
 def lam_sach_van_ban(text):
+    """
+    Làm sạch cơ bản: in thường, xóa emoji, dấu câu, khoảng trắng.
+    Sau đó chuẩn hoá teen code.
+    Giữ nguyên nghĩa gốc của bình luận.
+    """
     if not isinstance(text, str):
         return ""
-        
+
     # 1. Chuyển thành chữ thường
     text = text.lower()
-    
-    # 2. Xóa các ký tự đặc biệt, dấu câu... (chỉ giữ lại chữ, số và khoảng trắng)
-    text = re.sub(r"[^\w\s]", "", text)
-    
-    # 3. Xóa khoảng trắng thừa
-    text = re.sub(r"\s+", " ", text).strip()
-    
-    # 4. LOẠI BỎ STOPWORDS
-    words = text.split()
-    filtered_words = [word for word in words if word not in tap_stopwords]
-    
-    return " ".join(filtered_words)
+
+    # 2. Xóa emoji (Unicode emoji ranges)
+    text = re.sub(
+        r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF'
+        r'\U0001F1E0-\U0001F1FF\U00002702-\U000027B0\U0000FE00-\U0000FE0F'
+        r'\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF'
+        r'\U00002600-\U000026FF\U00002700-\U000027BF]+',
+        '', text
+    )
+
+    # 3. Xóa các ký tự đặc biệt, dấu câu (giữ lại chữ, số, khoảng trắng)
+    text = re.sub(r'[^\w\s]', '', text)
+
+    # 4. Xóa khoảng trắng thừa
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    # 5. Chuẩn hoá teen code
+    text = normalize_teen_code(text)
+
+    return text
 
 
 # ==========================================
-# 3. ĐỌC DỮ LIỆU VÀ ÁP DỤNG
+# 2. ĐỌC DỮ LIỆU VÀ ÁP DỤNG
 # ==========================================
-df = pd.read_csv(file_path, encoding="utf-8")
-ten_cot_can_lam_sach = "noi_dung"
+if __name__ == "__main__":
+    # Lấy thư mục hiện tại để đường dẫn luôn chuẩn
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, "data.csv")
+    output_path = os.path.join(current_dir, "data_clean.csv")
 
-# Gọi đúng tên hàm là lam_sach_van_ban
-df["NoiDung_Da_Tach_Tu"] = df[ten_cot_can_lam_sach].apply(lam_sach_van_ban)
+    df = pd.read_csv(file_path, encoding="utf-8")
 
-print("KIỂM TRA DỮ LIỆU SAU KHI LÀM SẠCH:")
-print(df[[ten_cot_can_lam_sach, "NoiDung_Da_Tach_Tu"]].head())
+    # Tìm cột chứa nội dung bình luận
+    # Hỗ trợ nhiều tên cột khác nhau tuỳ nguồn dữ liệu
+    ten_cot_can_lam_sach = None
+    for col_name in ["noi_dung", "text", "content", "comment"]:
+        if col_name in df.columns:
+            ten_cot_can_lam_sach = col_name
+            break
 
-# Xuất dữ liệu vào file data_clean1.csv (sử dụng biến output_path cho an toàn)
-df.to_csv(output_path, index=False, encoding="utf-8-sig")
+    if ten_cot_can_lam_sach is None:
+        print(f"Loi: Khong tim thay cot noi dung trong CSV.")
+        print(f"Cac cot hien co: {list(df.columns)}")
+        exit(1)
 
-print(f"\n[Thành công] Đã lưu dữ liệu sạch vào file 'data_clean1.csv'!")
+    # Áp dụng hàm làm sạch + chuẩn hoá teen code
+    df["noi_dung_da_lam_sach"] = df[ten_cot_can_lam_sach].apply(lam_sach_van_ban)
+
+    print("KIEM TRA DU LIEU SAU KHI LAM SACH + CHUAN HOA TEEN CODE:")
+    print(df[[ten_cot_can_lam_sach, "noi_dung_da_lam_sach"]].head(10))
+
+    # Xuất dữ liệu đã làm sạch
+    df.to_csv(output_path, index=False, encoding="utf-8-sig")
+
+    print(f"\n[Thanh cong] Da luu du lieu sach vao file '{output_path}'!")
+    print(f"  So dong: {len(df)}")
+    print(f"  Cot moi: 'noi_dung_da_lam_sach' (da clean + chuan hoa teen code)")

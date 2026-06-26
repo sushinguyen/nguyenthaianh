@@ -35,6 +35,9 @@ import json
 # Import CommentScraper và cấu hình từ comment_scraper.py
 from comment_scraper import CommentScraper, PLATFORM_CONFIG
 
+# Import module chuẩn hoá teen code
+from teen_code import normalize_teen_code
+
 
 def format_comment(index: int, comment) -> str:
     """
@@ -104,7 +107,8 @@ def save_comments_to_txt(comments: list, output_path: str = "data1.txt") -> int:
 
 def clean_text_basic(text: str) -> str:
     """
-    Xử lý đơn giản: in thường, xóa dấu câu, chuẩn hóa khoảng trắng.
+    Xử lý đơn giản: in thường, xóa dấu câu, chuẩn hóa khoảng trắng,
+    chuẩn hoá teen code.
     Giữ nguyên nghĩa gốc của bình luận.
     """
     if not isinstance(text, str):
@@ -123,6 +127,8 @@ def clean_text_basic(text: str) -> str:
     text = re.sub(r'[^\w\s]', '', text)
     # 4. Xóa khoảng trắng thừa
     text = re.sub(r'\s+', ' ', text).strip()
+    # 5. Chuẩn hoá teen code
+    text = normalize_teen_code(text)
     return text
 
 
@@ -197,6 +203,7 @@ def save_stopword_txt(comments: list, output_path: str = "data_clean1.txt") -> i
             if not hasattr(comment, "text") or not comment.text.strip():
                 continue
             # Bước 1: Clean cơ bản (in thường, xóa dấu câu, khoảng trắng)
+            # (clean_text_basic đã bao gồm chuẩn hoá teen code)
             cleaned = clean_text_basic(comment.text)
             if not cleaned:
                 continue
