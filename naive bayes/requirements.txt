@@ -1,0 +1,7 @@
+playwright
+pandas
+scikit-learn
+scipy
+joblib
+underthesea
+matplotlib

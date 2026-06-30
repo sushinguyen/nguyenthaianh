@@ -1,0 +1,40 @@
+# === Python cache ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# === Model files (lớn, tái tạo được từ data) ===
+*.pkl
+*.npz
+
+# === Data đã xử lý (tái tạo được từ scraper) ===
+data_clean.csv
+data_clean.txt
+data_clean1.csv
+data_clean1.txt
+
+# === Dữ liệu nhạy cảm (có thể có thông tin người dùng) ===
+# Bỏ comment dòng dưới nếu KHÔNG muốn commit data thô
+# data.csv
+# data1.txt
+
+# === Output ảnh ===
+*.png
+*.jpg
+
+# === IDE ===
+.vscode/
+.idea/
+*.sublime-project
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Môi trường ảo ===
+venv/
+env/
+.env
