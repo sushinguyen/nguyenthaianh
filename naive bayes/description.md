@@ -24,26 +24,32 @@ Scrape → NFC → Clean → Teen Code → Tokenize (underthesea) → Stopwords 
        │         ▼
        │    data.csv           ← Dữ liệu thô (platform, username, text, nhan, ...)
        │         │
-       │         ├──▶ text_cleaner.py ──▶ data_clean.csv
-       │         │     (NFC + clean + teen code + tokenize, GIỮ nghĩa)
+       │         ▼
+       │    text_cleaner.py ──▶ data_clean.csv
+       │         │               (NFC + clean + teen code + tokenize, GIỮ nghĩa)
        │         │
-       │         └──▶ stopword.py ──▶ data_clean1.csv ─────────┐
-       │               (NFC + clean + teen code + tokenize       │
-       │                + loại bỏ stopwords)                     │
-       │                                                         ▼
-       └─── LUỒNG TXT ──────────────────────────────────▶ tfidf_vectorizer.py
-            comment_extractor.py                                 │
-                 │                                               ▼
-                 ▼                                         tfidf_matrix.npz
-            data1.txt          ← Dữ liệu thô              tfidf_vocab.json
-                 │                                         tfidf_vectorizer.pkl
-                 ├──▶ data_clean.txt                             │
-                 │                                               ▼
-                 └──▶ data_clean1.txt ───────────────────▶ train_model.py
-                                                                 │
-                                                                 ▼
-                                                           nb_model.pkl
-                                                      confusion_matrix.png
+       │         ▼
+       │    stopword.py ──────▶ data_clean1.csv ──────────────────┐
+       │         [FIX F14]       (chỉ lọc stopwords                │
+       │         đọc data_clean.csv, không phải data.csv thô)      │
+       │                                                           ▼
+       └─── LUỒNG TXT ────────────────────────────────────▶ train_model.py
+            comment_extractor.py                                   │
+                 │                                                  ▼
+                 ▼                                           nb_model.pkl
+            data1.txt          ← Dữ liệu thô            confusion_matrix.png
+                 │
+                 └──▶ data_clean1.txt ─────────────────────────────┘
+```
+
+**Công cụ phân tích vocabulary (tùy chọn — không bắt buộc trong pipeline):**
+```
+            data_clean1.csv ──▶ tfidf_vectorizer.py (STANDALONE)
+                                       │
+                                       ▼
+                               tfidf_matrix.npz
+                               tfidf_vocab.json
+                               tfidf_vectorizer.pkl  ← KHÁC nb_model.pkl
 ```
 
 **Modules dùng chung:**
@@ -66,9 +72,9 @@ stopwords-vi.json ← Danh sách stopwords tiếng Việt
 | `utils.py`             | **[DÙNG CHUNG]** NFC normalize, clean, tokenize (underthesea), stopwords |
 | `teen_code.py`         | Từ điển 95 mục teen code + hàm chuẩn hoá |
 | `text_cleaner.py`      | Bước 1: Clean + tokenize, KHÔNG lọc stopwords → `data_clean.csv` |
-| `stopword.py`          | Bước 2: Clean + tokenize + lọc stopwords → `data_clean1.csv / .txt` |
-| `tfidf_vectorizer.py`  | Bước 3: Vector hoá TF-IDF → ma trận số |
-| `train_model.py`       | Bước 4: Train Naive Bayes + Cross-Validation + Confusion Matrix |
+| `stopword.py`          | Bước 2: Đọc `data_clean.csv` → chỉ lọc stopwords → `data_clean1.csv` **[FIX F14]** |
+| `tfidf_vectorizer.py`  | **[STANDALONE]** Khảo sát vocabulary TF-IDF — không bắt buộc trong pipeline train **[FIX F16]** |
+| `train_model.py`       | Bước 3: Train Naive Bayes (tích hợp TF-IDF bên trong Pipeline) + Cross-Validation + Confusion Matrix |
 
 ### Tài nguyên dùng chung
 
@@ -399,6 +405,9 @@ Confusion matrix saved: confusion_matrix.png
 | F11 | Code trùng lặp ở 3 file (load_stopwords, clean_text, remove_stopwords) | Gom vào `utils.py` dùng chung |
 | F12 | Không có `requirements.txt` | Tạo `requirements.txt` |
 | F13 | Không có `.gitignore` | Tạo `.gitignore` |
+| F14 | `stopword.py` đọc `data.csv` thô thay vì `data_clean.csv` — khiến `text_cleaner.py` bị bỏ qua, pipeline CSV bị sai thứ tự | Sửa `FILE_CSV_INPUT = 'data_clean.csv'`; ưu tiên đọc cột `noi_dung_da_lam_sach` rồi chỉ lọc stopwords |
+| F15 | `token_pattern=r'\w[\w_]+'` trong `train_model.py` yêu cầu tối thiểu 2 ký tự — bỏ mất từ đơn âm tiết | Sửa thành `r'\w[\w_]*'` để nhận từ ≥ 1 ký tự |
+| F16 | `tfidf_vectorizer.py` không có ghi chú rõ là standalone — dễ nhầm là bước bắt buộc trong pipeline; `nb_model.pkl` đã chứa cả vectorizer bên trong | Thêm cảnh báo rõ ràng trong docstring: đây là công cụ phân tích, KHÔNG cần chạy trước `train_model.py` |
 
 ---
 
@@ -416,7 +425,6 @@ Confusion matrix saved: confusion_matrix.png
 | # | Vấn đề | Cần làm |
 |---|--------|---------|
 | **P3** | `comment_extractor.py` chưa cập nhật dùng `utils.py` | Refactor để dùng `preprocess_full()` từ `utils` |
-| **P4** | `tfidf_vectorizer.py` chưa tự động điều chỉnh `min_df` theo dataset size | Thêm logic: `min_df=1` nếu < 500 dòng (đã giải quyết trong `train_model.py`) |
 | **P5** | `claude.md` mô tả pipeline cũ, không khớp code hiện tại | Cập nhật lại `claude.md` |
 | **P6** | Dữ liệu scrape lẫn metadata (hashtag, timestamp, UI text "Xem 39 câu trả lời") | Thêm bộ lọc trong scraper: bỏ dòng < 3 từ, bỏ dòng chỉ chứa số/ký hiệu |
 
@@ -430,12 +438,13 @@ Confusion matrix saved: confusion_matrix.png
    P2 → Thu thập thêm data (ít nhất 500 bình luận có nhãn)
 
 2. Sau khi có đủ data có nhãn:
-   Chạy pipeline: text_cleaner.py → stopword.py → train_model.py
-   → train_model.py đã tích hợp: cross-validation, confusion matrix, save model
+   Chạy đúng thứ tự:
+     text_cleaner.py → stopword.py → train_model.py
+   (tfidf_vectorizer.py là tuỳ chọn — chỉ dùng để phân tích vocabulary)
+   → train_model.py đã tích hợp: TF-IDF + cross-validation + confusion matrix + save model
 
 3. Cải thiện tiếp:
    P3 → Refactor comment_extractor.py
-   P4 → Auto min_df trong tfidf_vectorizer.py
    P5 → Cập nhật claude.md
    P6 → Lọc metadata trong scraper
 ```

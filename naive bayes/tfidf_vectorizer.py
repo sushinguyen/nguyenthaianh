@@ -1,7 +1,23 @@
 """
 =============================================================================
-TF-IDF VECTORIZER — Vector hoá văn bản tiếng Việt cho Naive Bayes
+TF-IDF VECTORIZER — Công cụ phân tích & khảo sát vocabulary (STANDALONE)
 =============================================================================
+
+⚠️  LƯU Ý QUAN TRỌNG VỀ PIPELINE:
+    File này là công cụ STANDALONE để khảo sát và phân tích vocabulary.
+    Nó KHÔNG phải một bước bắt buộc trong pipeline huấn luyện Naive Bayes.
+
+    train_model.py đã tự tạo TfidfVectorizer bên trong sklearn.Pipeline
+    (kết hợp với MultinomialNB) nên:
+      - KHÔNG cần chạy file này trước train_model.py
+      - tfidf_vectorizer.pkl sinh ra ở đây KHÁC với vectorizer trong nb_model.pkl
+      - nb_model.pkl đã chứa cả vectorizer + model → dùng để predict
+
+    Dùng file này khi muốn:
+      - Xem top từ có TF-IDF cao nhất
+      - Kiểm tra vocabulary trước khi train
+      - Xuất ma trận TF-IDF ra file .npz để phân tích riêng
+
 Chuyển dữ liệu đã tiền xử lý (data_clean1.csv / data_clean1.txt) thành
 ma trận TF-IDF, sẵn sàng đưa vào mô hình MultinomialNB.
 
@@ -13,7 +29,7 @@ Tinh chỉnh phù hợp với hệ thống:
 Output:
   - tfidf_matrix.npz      : Ma trận TF-IDF dạng sparse
   - tfidf_vocab.json       : Từ điển vocabulary {từ: index}
-  - tfidf_vectorizer.pkl   : Vectorizer object (dùng cho dự đoán sau này)
+  - tfidf_vectorizer.pkl   : Vectorizer object (standalone — KHÁC nb_model.pkl)
 
 Sử dụng:
   python tfidf_vectorizer.py

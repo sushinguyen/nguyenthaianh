@@ -79,7 +79,8 @@ def train_and_evaluate(df: pd.DataFrame):
             min_df=min_df,
             max_df=0.90,
             sublinear_tf=True,
-            token_pattern=r'(?u)\b\w[\w_]+\b',
+            # [FIX F15] Dùng \w[\w_]* thay \w[\w_]+ để nhận từ đơn ký tự (ví dụ từ 1 âm tiết)
+            token_pattern=r'(?u)\b\w[\w_]*\b',
             norm='l2',
             use_idf=True,
             smooth_idf=True,
