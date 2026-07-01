@@ -205,6 +205,173 @@ python train_model.py
 
 ---
 
+## 🚀 Ví dụ chạy từng bước (End-to-End)
+
+> Dưới đây là hướng dẫn **thứ tự chạy cụ thể** từ đầu đến cuối, kèm output mong đợi sau mỗi bước.
+
+---
+
+### Bước 1 — Cài đặt môi trường
+
+```bash
+# Tạo virtual environment (khuyến nghị)
+python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Linux/Mac
+
+# Cài thư viện
+python -m pip install -r requirements.txt
+
+# Cài trình duyệt cho Playwright (chỉ cần lần đầu)
+playwright install chromium
+```
+
+📁 **Không có file nào được tạo ra ở bước này.**
+
+---
+
+### Bước 2 — Thu thập bình luận (`comment_scraper.py`)
+
+```bash
+# Scrape bình luận từ Facebook
+python comment_scraper.py --url "https://www.facebook.com/permalink/..." --platform facebook
+
+# Scrape bình luận từ TikTok
+python comment_scraper.py --url "https://www.tiktok.com/@user/video/..." --platform tiktok
+```
+
+📁 **Output:** `data.csv`
+
+```
+platform,username,text,nhan,rating,timestamp
+facebook,nguyen_a,"sản phẩm tốt lắm",,, 2024-01-01
+tiktok,tran_b,"giao hàng chậm quá",,, 2024-01-02
+```
+
+> ⚠️ Cột `nhan` còn trống — cần gán nhãn thủ công ở bước tiếp theo!
+
+---
+
+### Bước 3 — Gán nhãn thủ công (bắt buộc)
+
+Mở `data.csv` bằng Excel hoặc Google Sheets, điền cột `nhan`:
+
+| Giá trị       | Ý nghĩa          |
+|---------------|------------------|
+| `tich_cuc`    | Bình luận tích cực (khen, hài lòng) |
+| `tieu_cuc`    | Bình luận tiêu cực (chê, phàn nàn)  |
+| `trung_tinh`  | Bình luận trung tính (hỏi, thông tin)|
+
+```csv
+platform,username,text,nhan
+facebook,nguyen_a,"sản phẩm tốt lắm",tich_cuc
+tiktok,tran_b,"giao hàng chậm quá",tieu_cuc
+```
+
+> ⚠️ **Tối thiểu 500 dòng có nhãn, mỗi nhãn ≥ 100 mẫu** để model đủ độ chính xác.
+
+---
+
+### Bước 4 — Làm sạch văn bản (`text_cleaner.py`)
+
+```bash
+python text_cleaner.py
+```
+
+📁 **Input:** `data.csv`  
+📁 **Output:** `data_clean.csv`
+
+**Ví dụ kết quả:**
+
+| text (trước)                    | text (sau)                         |
+|---------------------------------|------------------------------------|
+| `ko hc hoá vẫn ngồi nghe 😂`   | `không học hoá vẫn ngồi nghe`      |
+| `sp nhanh dc, cx tốt lắm!!`    | `sản_phẩm nhanh được cũng tốt lắm` |
+| `https://t.co/abc123 check đi` | `check đi`                          |
+
+Các bước được áp dụng: **NFC → lowercase → bỏ emoji → bỏ URL → teen code → tokenize**
+
+---
+
+### Bước 5 — Lọc stopwords (`stopword.py`)
+
+```bash
+python stopword.py
+```
+
+📁 **Input:** `data_clean.csv`  
+📁 **Output:** `data_clean1.csv`, `data_clean1.txt`
+
+**Ví dụ kết quả:**
+
+| text (trước stopwords)                  | text (sau stopwords)           |
+|-----------------------------------------|--------------------------------|
+| `sản_phẩm nhanh được cũng tốt lắm`     | `sản_phẩm nhanh tốt`           |
+| `giao_hàng chậm quá thất vọng`          | `giao_hàng chậm thất_vọng`     |
+
+> ✅ Các từ phủ định `không`, `chưa`, `chẳng`, `được` **được giữ lại** để không đảo nghĩa câu.
+
+---
+
+### Bước 6 — Vector hoá TF-IDF (`tfidf_vectorizer.py`)
+
+```bash
+python tfidf_vectorizer.py
+```
+
+📁 **Input:** `data_clean1.csv`  
+📁 **Output:** `tfidf_matrix.npz`, `tfidf_vocab.json`, `tfidf_vectorizer.pkl`
+
+**Ví dụ vocabulary:**
+
+```json
+{
+  "sản_phẩm": 0,
+  "giao_hàng": 1,
+  "không": 2,
+  "tốt": 3,
+  "chậm": 4,
+  ...
+}
+```
+
+---
+
+### Bước 7 — Train mô hình (`train_model.py`)
+
+```bash
+python train_model.py
+```
+
+📁 **Input:** `data_clean1.csv` (phải có cột `nhan`), `tfidf_vectorizer.pkl`  
+📁 **Output:** `nb_model.pkl`, `confusion_matrix.png`
+
+**Output terminal mong đợi:**
+
+```
+Training Naive Bayes...
+Cross-validation scores: [0.82, 0.79, 0.85, 0.81, 0.83]
+Mean CV Accuracy: 0.820 ± 0.021
+Model saved: nb_model.pkl
+Confusion matrix saved: confusion_matrix.png
+```
+
+---
+
+### Tóm tắt thứ tự chạy
+
+```
+1. python -m pip install -r requirements.txt    ← Chỉ chạy 1 lần
+2. python comment_scraper.py                    ← Thu thập data
+   [Gán nhãn thủ công vào data.csv]            ← Làm bằng tay
+3. python text_cleaner.py                       ← Làm sạch văn bản
+4. python stopword.py                           ← Lọc stopwords
+5. python tfidf_vectorizer.py                   ← Vector hoá
+6. python train_model.py                        ← Train & đánh giá
+```
+
+---
+
 ## Nền tảng hỗ trợ
 
 | Nền tảng | Loại nội dung |
@@ -215,7 +382,6 @@ python train_model.py
 ---
 
 ## 🐛 Known Issues & Roadmap
-
 ### ✅ Đã fix
 
 | # | Vấn đề | Cách sửa |
